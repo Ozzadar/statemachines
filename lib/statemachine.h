@@ -7,8 +7,8 @@
 #include <utility>
 #include <tuple>
 template<typename T>
-concept StatelessCallable = requires(T t) {
-    { t() } -> std::same_as<void>;
+concept StatelessCallable = requires(T t, void* ctx) {
+    { t(ctx) } -> std::same_as<void>;
 };
 
 template<auto ThisState,
@@ -29,19 +29,19 @@ public:
         return ((nextState == AllowedTransitions) || ...);
     }
 
-    static void EnterState(EnumType nextState) {
-        OnEnter();
+    static void EnterState(void* contextPtr = nullptr) {
+        OnEnter(contextPtr);
     }
 
-    static void ExitState() {
-        OnExit();
+    static void ExitState(void* contextPtr = nullptr) {
+        OnExit(contextPtr);
     }
 };
 
 template<typename EnumType, EnumType InitialState = {}, typename... StatesTypes>
 class StateMachine {
 public:
-    StateMachine() {
+    explicit StateMachine(void* contextPtr = nullptr) : context(contextPtr) {
         States = std::make_tuple(StatesTypes{}...);
         CurrentState = InitialState;
     };
@@ -60,8 +60,8 @@ public:
         std::visit([&](auto& current, auto& next) {
             // current and next are std::reference_wrapper of the specific state types
             if (current.get().IsTransitionAllowed(nextState)) {
-                current.get().ExitState();
-                next.get().EnterState(CurrentState);
+                current.get().ExitState(context);
+                next.get().EnterState(context);
                 allowedTransition = true;
             }
         }, currentVariant, nextVariant);
@@ -75,9 +75,13 @@ public:
         return CurrentState;
     }
 
+    [[nodiscard]] void* GetContext() const {
+        return context;
+    }
 private:
     EnumType CurrentState;
     std::tuple<StatesTypes...> States;
+    void* context = nullptr;
 
     using StateVariant = std::variant<std::reference_wrapper<StatesTypes>...>;
 

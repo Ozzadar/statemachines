@@ -10,22 +10,59 @@ enum class AppState {
     Running,
     Stopped
 };
+
+class FakeContext {
+public:
+    uint8_t EnteredCount = 0;
+    uint8_t ExitedCount = 0;
+};
+
 using IdleState = State<
         AppState::Idle,
-        []() { std::cout << "Entering Idle" << std::endl; },
-        []() { std::cout << "Exiting Idle" << std::endl; },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->EnteredCount++;
+            }
+        },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->ExitedCount++;
+            }
+        },
         AppState::Running>;
 
 using RunningState = State<
         AppState::Running,
-        []() { std::cout << "Entering Running" << std::endl; },
-        []() { std::cout << "Exiting Running" << std::endl; },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->EnteredCount++;
+            }
+        },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->ExitedCount++;
+            }
+        },
         AppState::Stopped>;
 
 using StoppedState = State<
     AppState::Stopped,
-        []() { std::cout << "Entering Stopped" << std::endl; },
-        []() { std::cout << "Exiting Stopped" << std::endl; },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->EnteredCount++;
+            }
+        },
+        [](void* context) {
+            if (context) {
+                auto* ctx = static_cast<FakeContext*>(context);
+                ctx->ExitedCount++;
+            }
+        },
         AppState::Idle>;
 
 TEST(StateTransitions, AreAllowed) {
@@ -49,4 +86,22 @@ TEST(StateMachineTransitions, AreAllowed) {
     EXPECT_FALSE(sm.GoToState(AppState::Stopped));
     EXPECT_FALSE(sm.GoToState(AppState::Running));
     EXPECT_TRUE(sm.GoToState(AppState::Idle));
+}
+
+TEST(StateMachineTransitions, Context) {
+    FakeContext context;
+    StateMachine<AppState, AppState::Idle, IdleState, RunningState, StoppedState> sm(&context);
+    EXPECT_EQ(sm.GetContext(), &context);
+    EXPECT_EQ(context.EnteredCount, 0);
+    EXPECT_EQ(context.ExitedCount, 0);
+
+    EXPECT_TRUE(sm.GoToState(AppState::Running));
+    EXPECT_EQ(context.EnteredCount, 1);
+    EXPECT_EQ(context.ExitedCount, 1);
+    EXPECT_TRUE(sm.GoToState(AppState::Stopped));
+    EXPECT_EQ(context.EnteredCount, 2);
+    EXPECT_EQ(context.ExitedCount, 2);
+    EXPECT_TRUE(sm.GoToState(AppState::Idle));
+    EXPECT_EQ(context.EnteredCount, 3);
+    EXPECT_EQ(context.ExitedCount, 3);
 }
